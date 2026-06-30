@@ -54,7 +54,7 @@ Set `Def` to the game's real default so an unmoved slider equals the default.
 Run the local checks (same as CI):
 
 ```bat
-build.bat
+Build-From-Source.bat
 ```
 
 This runs PSScriptAnalyzer (if installed), validates the JSON, and builds the GUI

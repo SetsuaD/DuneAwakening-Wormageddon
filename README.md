@@ -94,18 +94,38 @@ Full details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
-## Quick start
+## Get it
+
+**Download** the latest [release](https://github.com/SetsuaD/DuneAwakening-Wormageddon/releases/latest)
+and unzip it, **or** clone:
 
 ```bat
 git clone https://github.com/SetsuaD/DuneAwakening-Wormageddon.git
-cd DuneAwakening-Wormageddon
-setup.bat        ::  seeds dune-connection.json + a Desktop shortcut
-run_dev.bat      ::  opens the GUI
 ```
 
-In the GUI: **Connect to Server** (enter your server IP, SSH user `dune`, and
-your SSH key file) → pick a **shard** → **Read current** (or load a **Preset**)
-→ drag sliders → **APPLY + RESTART**.
+> [!NOTE]
+> Wormageddon is **100% plain-text PowerShell — there is no compiled `.exe`**.
+> Every file is human-readable; you can (and should) read it before running it.
+
+## Three ways to run it
+
+It's just three `.bat` files in the folder — pick one:
+
+| Double-click | What it does | Use when |
+|---|---|---|
+| **`Run-Portable.bat`** | Opens the GUI right now. Installs nothing, no shortcut, no admin. | You just want to use it. |
+| **`Setup-Shortcut.bat`** | Adds a "Wormageddon" **Desktop shortcut** (and seeds the config file). Still runs from this folder. | You'll use it often and want a Desktop icon. |
+| **`Build-From-Source.bat`** | **Lints, self-tests, validates, and zips** a clean build to `dist\`. | You want to review/verify the source and package it yourself. |
+
+To uninstall, just delete the folder (and the Desktop shortcut, if you made one).
+*(The classic `setup.bat` / `run_dev.bat` / `build.bat` names still work too — they
+forward to the three above.)*
+
+## Using the GUI
+
+**Connect to Server** (first run — enter your server IP, SSH user `dune`, and your
+SSH key file) → pick a **shard** → **Read current** (or load a **Preset**) → drag
+sliders → **APPLY + RESTART**.
 
 Prefer the command line? Everything the GUI does is available headless:
 

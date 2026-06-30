@@ -200,13 +200,13 @@ $form.Controls.AddRange(@($lblPreset,$cboPreset,$btnPreset,$lblPresetNote))
 $txtHelp = New-Object System.Windows.Forms.TextBox
 $txtHelp.Multiline=$true; $txtHelp.ReadOnly=$true; $txtHelp.ScrollBars='Vertical'; $txtHelp.Location='14,74'; $txtHelp.Size=New-Object System.Drawing.Size(720,96); $txtHelp.BackColor=[System.Drawing.Color]::FromArgb(245,245,240); $txtHelp.Anchor='Top, Left, Right'
 $txtHelp.Text = @"
-HOW TO USE
- 1. "Connect to Server" (first run): enter the server IP, SSH user, and an SSH key file (or password). Saved locally.
- 2. Pick the shard. Overrides apply battlegroup-wide and take effect on each shard at its next restart.
- 3. "Read current" loads live values into every tab, OR pick a Preset to load a curated bundle. Drag sliders to tune (each has a description).
- 4. "APPLY + RESTART" writes the overrides AND reboots that shard (a console shows progress; players on it drop ~1 min). Use an empty shard or warn players.
- 5. "RESTORE DEFAULTS" reverts every setting this tool manages + restarts (your other config, e.g. PvP/landclaim, is left untouched).
-TIMING: these are SERVER settings - set + restart FIRST, then JOIN to see the effect. WORMS repopulate ~10 MINUTES after ANY restart - use "Worms?" to check.
+HOW TO USE  -  tune worm sign & threat in 4 steps:
+ 1. CONNECT - click "Connect to Server" (first run only): enter your server IP + SSH key. Saved locally on this PC.
+ 2. LOAD    - pick a shard, then "Read current" for live values, OR choose a Preset (Calm / Standard / WORMAGEDDON).
+ 3. TUNE    - drag the sliders across the tabs; each has a plain-English description (On/Off sliders are toggles).
+ 4. APPLY   - "APPLY + RESTART" writes your changes and reboots that shard.  "RESTORE DEFAULTS" reverts only this tool's settings.
+HEADS UP: these are SERVER settings - they take effect after the restart, so JOIN afterwards to see them. A restart drops the
+players on that shard for ~1 min (warn them, or check "Worms?" first). Worms repopulate ~10 MIN after ANY restart - that's normal.
 "@
 $form.Controls.Add($txtHelp)
 
