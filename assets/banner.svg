@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Wormageddon — wide README banner.
+  Left: a compact sandworm + control-ring mark. Right: wordmark + tagline.
+  Hand-authored, self-contained, no web fonts (uses generic serif/sans stacks).
+-->
+<svg width="1280" height="360" viewBox="0 0 1280 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Wormageddon banner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#140D20"/>
+      <stop offset="55%" stop-color="#1C1226"/>
+      <stop offset="100%" stop-color="#0C0813"/>
+    </linearGradient>
+    <radialGradient id="spice2" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#FFD27A"/>
+      <stop offset="50%" stop-color="#E8862E"/>
+      <stop offset="100%" stop-color="#7A3B0E"/>
+    </radialGradient>
+    <linearGradient id="worm2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E2B873"/>
+      <stop offset="60%" stop-color="#B6843C"/>
+      <stop offset="100%" stop-color="#6E4A1E"/>
+    </linearGradient>
+    <linearGradient id="dune2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D8A24A"/>
+      <stop offset="100%" stop-color="#7A521E"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFE2A8"/>
+      <stop offset="100%" stop-color="#E8862E"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="360" fill="url(#bg)"/>
+
+  <!-- faint dune horizon across the whole banner -->
+  <path d="M0 300 C 200 270 360 320 560 296 C 820 266 1000 320 1280 286 L1280 360 L0 360 Z" fill="url(#dune2)" opacity="0.35"/>
+
+  <!-- Emblem on the left -->
+  <g transform="translate(180 180) scale(0.62)">
+    <circle cx="0" cy="0" r="200" fill="#0E0A16" stroke="#E8862E" stroke-width="6"/>
+    <circle cx="0" cy="-10" r="130" fill="url(#spice2)" opacity="0.5"/>
+    <!-- worm body -->
+    <path d="M0 200
+             C -42 160 -42 120 -16 92
+             C 8 64 -6 30 -24 12
+             L 0 -14 L 24 12
+             C 6 30 -8 64 16 92
+             C 42 120 42 160 0 200 Z"
+          fill="url(#worm2)" stroke="#3A260E" stroke-width="5"/>
+    <!-- maw -->
+    <circle cx="0" cy="-40" r="58" fill="#1A0E06"/>
+    <circle cx="0" cy="-40" r="58" fill="url(#spice2)" opacity="0.3"/>
+    <g fill="#F0E2C2">
+      <g id="f2"><polygon points="0,-92 -8,-66 8,-66"/></g>
+      <use href="#f2" transform="rotate(40 0 -40)"/>
+      <use href="#f2" transform="rotate(80 0 -40)"/>
+      <use href="#f2" transform="rotate(120 0 -40)"/>
+      <use href="#f2" transform="rotate(160 0 -40)"/>
+      <use href="#f2" transform="rotate(200 0 -40)"/>
+      <use href="#f2" transform="rotate(240 0 -40)"/>
+      <use href="#f2" transform="rotate(280 0 -40)"/>
+      <use href="#f2" transform="rotate(320 0 -40)"/>
+    </g>
+    <circle cx="0" cy="-40" r="24" fill="#0A0603"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="372" y="176" font-family="Georgia, 'Times New Roman', serif" font-size="92" font-weight="700"
+        letter-spacing="2" fill="url(#ink)">WORMAGEDDON</text>
+  <text x="376" y="226" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="27" letter-spacing="5"
+        fill="#C9B68F">DUNE&#160;:&#160;AWAKENING&#160;&#8212;&#160;DEDICATED&#160;SERVER&#160;CONTROL</text>
+
+  <!-- Tagline chips -->
+  <g font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" fill="#1B1226">
+    <g>
+      <rect x="376" y="256" width="150" height="36" rx="18" fill="#E8862E"/>
+      <text x="451" y="280" text-anchor="middle" font-weight="600">worm sign</text>
+    </g>
+    <g>
+      <rect x="540" y="256" width="166" height="36" rx="18" fill="#D8A24A"/>
+      <text x="623" y="280" text-anchor="middle" font-weight="600">threat levels</text>
+    </g>
+    <g>
+      <rect x="720" y="256" width="150" height="36" rx="18" fill="#C9A227"/>
+      <text x="795" y="280" text-anchor="middle" font-weight="600">sandstorms</text>
+    </g>
+    <g>
+      <rect x="884" y="256" width="140" height="36" rx="18" fill="#B6843C"/>
+      <text x="954" y="280" text-anchor="middle" font-weight="600">difficulty</text>
+    </g>
+  </g>
+</svg>

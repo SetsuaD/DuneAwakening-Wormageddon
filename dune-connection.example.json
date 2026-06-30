@@ -1,0 +1,10 @@
+{
+  "_comment": "Copy this file to 'dune-connection.json' (same folder) and fill in YOUR server. dune-connection.json is git-ignored so your details never get committed. You can also create it from the GUI's 'Connect to Server' dialog instead of editing by hand.",
+
+  "Host": "YOUR.DUNE.SERVER.IP",
+  "User": "dune",
+  "KeyPath": "C:\\path\\to\\your\\sshKey",
+  "Password": "",
+  "Namespace": "",
+  "Shards": []
+}

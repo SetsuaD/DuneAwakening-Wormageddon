@@ -1,0 +1,36 @@
+# Lint + smoke-test the PowerShell on every push/PR.
+# Runs on Windows so the WinForms GUI self-test can actually build the form.
+name: lint
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $issues = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error
+          $issues | Format-Table -AutoSize
+          if ($issues.Count) { throw "PSScriptAnalyzer found $($issues.Count) error(s)" }
+
+      - name: Validate JSON
+        shell: pwsh
+        run: |
+          Get-Content presets.json -Raw | ConvertFrom-Json | Out-Null
+          Get-Content dune-connection.example.json -Raw | ConvertFrom-Json | Out-Null
+          'JSON OK'
+
+      - name: GUI self-test (builds the form headless)
+        shell: pwsh
+        run: ./Wormageddon-GUI.ps1 -SelfTest

@@ -1,0 +1,47 @@
+# ---------------------------------------------------------------------------
+# Wormageddon .gitignore
+# #1 rule: NEVER commit a real server profile or secret. dune-connection.json
+# holds YOUR server IP, SSH key path, namespace and (optionally) a password.
+# It is ignored on purpose - commit only dune-connection.example.json.
+# ---------------------------------------------------------------------------
+
+# Local server connection profile & secrets (site-specific - keep private)
+dune-connection.json
+*.secret
+*.key
+*.pem
+id_*
+sshKey
+.env
+.env.*
+
+# SSH known_hosts the tool generates on first connect (contains your host's key)
+dune_known_hosts
+
+# Timestamped UserGame.ini backups the tool writes before every change
+backups/
+
+# Build / packaging output
+dist/
+
+# Internal dev tracking (references private infra) - kept local, not published
+todo.md
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Abandoned early scaffold (a Python CLI prototype that targeted the wrong
+# settings layer). Kept out of the published repo; can be deleted locally.
+# ---------------------------------------------------------------------------
+wormageddon/
+tests/
+pyproject.toml
+requirements.txt
+run.sh
+__pycache__/
+*.py[cod]

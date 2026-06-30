@@ -1,0 +1,60 @@
+{
+  "_comment": "Curated worm-sign / threat-level bundles for Wormageddon. Each preset lists { group, key, value } entries in GAME-WRITE form (exactly what gets written into UserGame.ini). The CLI ('Wormageddon.ps1 preset <name>') applies them directly; the GUI loads them into the sliders for review. 'group' maps to a UE5 ini section (see Wormageddon.ps1 $SECMAP). Add your own presets by copying a block. The leading underscore key is ignored by the tools.",
+
+  "calm": {
+    "label": "Calm Dunes - relaxed worms, sparse & forgiving",
+    "settings": [
+      { "group": "Sandworm", "key": "ThreatScale",                        "value": "0.5" },
+      { "group": "Sandworm", "key": "DefaultMaxThreatScore",              "value": "12000" },
+      { "group": "Sandworm", "key": "WalkingThreatPerSec",               "value": "5" },
+      { "group": "Sandworm", "key": "SprintingThreatPerSec",             "value": "8" },
+      { "group": "Sandworm", "key": "DashingThreatPerSec",               "value": "30" },
+      { "group": "Sandworm", "key": "ShieldingThreatPerSec",             "value": "150" },
+      { "group": "Sandworm", "key": "m_MinDistanceBetweenSandworms",     "value": "150000" },
+      { "group": "Sandworm", "key": "m_bGiantWormSystemEnabled",         "value": "True" },
+      { "group": "Sandworm", "key": "m_GiantWormMinimumPlayersOnSpiceField", "value": "8" },
+      { "group": "Sandworm", "key": "m_GiantWormMinimumSpiceAmountHarvested", "value": "80000" },
+      { "group": "Sandworm", "key": "m_GiantWormSpawningCooldown",       "value": "14400" }
+    ]
+  },
+
+  "standard": {
+    "label": "Standard - the game's default worm behaviour",
+    "settings": [
+      { "group": "Sandworm", "key": "ThreatScale",                        "value": "1.0" },
+      { "group": "Sandworm", "key": "DefaultMaxThreatScore",              "value": "5000" },
+      { "group": "Sandworm", "key": "ThreatDecreaseCooldownInSeconds",    "value": "5" },
+      { "group": "Sandworm", "key": "WalkingThreatPerSec",               "value": "15" },
+      { "group": "Sandworm", "key": "SprintingThreatPerSec",             "value": "20" },
+      { "group": "Sandworm", "key": "DashingThreatPerSec",               "value": "90" },
+      { "group": "Sandworm", "key": "ShieldingThreatPerSec",             "value": "500" },
+      { "group": "Sandworm", "key": "DrumsandThreatPerSec",              "value": "200" },
+      { "group": "Sandworm", "key": "m_MinDistanceBetweenSandworms",     "value": "80000" },
+      { "group": "Sandworm", "key": "m_bGiantWormSystemEnabled",         "value": "True" },
+      { "group": "Sandworm", "key": "m_GiantWormMinimumPlayersOnSpiceField", "value": "4" },
+      { "group": "Sandworm", "key": "m_GiantWormMinimumSpiceAmountHarvested", "value": "50000" },
+      { "group": "Sandworm", "key": "m_GiantWormSpawningCooldown",       "value": "7200" },
+      { "group": "Sandworm", "key": "m_GiantWormSpawningUpdateFrequency", "value": "60" }
+    ]
+  },
+
+  "wormageddon": {
+    "label": "WORMAGEDDON - maximum worm threat, dense & summonable",
+    "settings": [
+      { "group": "Sandworm", "key": "ThreatScale",                        "value": "2.5" },
+      { "group": "Sandworm", "key": "DefaultMaxThreatScore",              "value": "1500" },
+      { "group": "Sandworm", "key": "ThreatDecreaseCooldownInSeconds",    "value": "10" },
+      { "group": "Sandworm", "key": "WalkingThreatPerSec",               "value": "50" },
+      { "group": "Sandworm", "key": "SprintingThreatPerSec",             "value": "70" },
+      { "group": "Sandworm", "key": "DashingThreatPerSec",               "value": "200" },
+      { "group": "Sandworm", "key": "ShieldingThreatPerSec",             "value": "900" },
+      { "group": "Sandworm", "key": "DrumsandThreatPerSec",              "value": "400" },
+      { "group": "Sandworm", "key": "m_MinDistanceBetweenSandworms",     "value": "30000" },
+      { "group": "Sandworm", "key": "m_bGiantWormSystemEnabled",         "value": "True" },
+      { "group": "Sandworm", "key": "m_GiantWormMinimumPlayersOnSpiceField", "value": "1" },
+      { "group": "Sandworm", "key": "m_GiantWormMinimumSpiceAmountHarvested", "value": "1000" },
+      { "group": "Sandworm", "key": "m_GiantWormSpawningCooldown",       "value": "60" },
+      { "group": "Sandworm", "key": "m_GiantWormSpawningUpdateFrequency", "value": "10" }
+    ]
+  }
+}
