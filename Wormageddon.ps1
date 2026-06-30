@@ -36,9 +36,16 @@
     unset   <Group> <Key> [-Shard S]         remove ONE override (revert that key to default)
     preset  <Name> [-Shard S]                apply a named bundle from presets.json (auto-backup)
     backup  [-Shard S]                       save a timestamped copy of UserGame.ini to .\backups
-    restart [-Shard S] [-Yes]                restart ONE shard so pending changes take effect
+    restart [-Shard S] [-WarnSeconds N] [-Yes] restart ONE shard (changes take effect);
+                                             -WarnSeconds N broadcasts a countdown first
+    broadcast "<msg>" ["<title>"] [-Yes]     send an in-game message to all players (needs daemon)
     ssh     "<cmd>"                          run a raw shell command on the VM (advanced/debug)
     help
+
+  BROADCAST is optional and needs the `dune-server-service` daemon on the VM
+  (shipped with the Dune Dedicated Server Manager) on loopback :29187 - we POST
+  to /api/admin/publish, which builds the RabbitMQ message. Without the daemon,
+  broadcast is unavailable but everything else still works. See docs/LIVE-COMMANDS.md.
 
   GROUPS -> ini section (friendly name on the left, real UE section on the right):
     Sandworm, TimeOfDay, Building, GameMode, Pvp, Security, Storm, Harvest,
@@ -58,6 +65,8 @@ param(
   [Parameter(Position=2)][string]$A2,
   [Parameter(Position=3)][string]$A3,
   [string]$Shard = 'Survival_1',
+  [int]$WarnSeconds = 0,
+  [switch]$DryRun,
   [switch]$Yes
 )
 $ErrorActionPreference = 'Stop'
@@ -69,7 +78,8 @@ if ($Action.ToLower() -in @('help','-h','--help','/?','')) {
   Write-Host "Usage: powershell -ExecutionPolicy Bypass -File .\Wormageddon.ps1 <action> [args] [-Shard <Map>]"
   Write-Host ""
   Write-Host "Actions: status | shards | worms | show | get <Key> | set <Group> <Key> <Value> |"
-  Write-Host "         unset <Group> <Key> | preset <Name> | backup | restart [-Yes] | ssh ""<cmd>"" | help"
+  Write-Host "         unset <Group> <Key> | preset <Name> | backup | restart [-WarnSeconds N] [-Yes] |"
+  Write-Host "         broadcast ""<msg>"" | ssh ""<cmd>"" | help"
   Write-Host "Groups : Sandworm TimeOfDay Building GameMode Pvp Security Storm Harvest FlourSand Hydration"
   Write-Host ""
   Write-Host "Connection comes from dune-connection.json (copy dune-connection.example.json)."
@@ -228,6 +238,34 @@ function Resolve-Section([string]$group) {
 }
 
 # --------------------------------------------------------------------------
+# Send-Broadcast - show an in-game message to all players.
+# Unlike the settings actions, this is a LIVE command (no restart). It uses the
+# optional `dune-server-service` daemon's loopback HTTP API on the VM
+# (:29187 /api/admin/publish), which builds the RabbitMQ envelope for us. The
+# daemon ships with the Dune Dedicated Server Manager; if it's not running, this
+# returns a clear error and nothing else is affected. We post the JSON body by
+# base64'ing it onto the VM (avoids any quoting problems) and curl --data @file.
+# Returns $true on a confirmed publish, else $false.
+# --------------------------------------------------------------------------
+function Send-Broadcast([string]$Title,[string]$Body,[int]$Duration=30,[switch]$Preview) {
+  $payload = @{ command='ServiceBroadcast'; fields=@{ BroadcastType='Generic'; Title=$Title; Body=$Body; BroadcastDuration=$Duration } } | ConvertTo-Json -Compress
+  if ($Preview) {
+    Write-Host "[dry-run] would POST to the daemon at http://127.0.0.1:29187/api/admin/publish :" -ForegroundColor DarkGray
+    Write-Host "  $payload"
+    return $true
+  }
+  $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
+  $remote = "echo $b64 | base64 -d > /tmp/wm_bcast.json; " +
+            "curl -s -m 8 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' " +
+            "--data @/tmp/wm_bcast.json http://127.0.0.1:29187/api/admin/publish; " +
+            "rm -f /tmp/wm_bcast.json"
+  $code = ("$(Dssh $remote)").Trim()
+  if ($code -eq '200' -or $code -eq '202') { Write-Host "Broadcast sent (HTTP $code)." -ForegroundColor Green; return $true }
+  Write-Host "Broadcast failed (HTTP '$code'). Is the dune-server-service daemon running on the VM (:29187)?" -ForegroundColor Red
+  return $false
+}
+
+# --------------------------------------------------------------------------
 # Action dispatch.
 # --------------------------------------------------------------------------
 switch ($Action.ToLower()) {
@@ -319,6 +357,11 @@ switch ($Action.ToLower()) {
     Write-Host "About to RESTART $Shard ($pod):" -ForegroundColor Yellow
     Dssh "sudo -n k3s kubectl get serverstats -n $NS 2>/dev/null | grep -i 'sg-$(MapKey $Shard)-pod'"
     if (-not $Yes) { if ((Read-Host "Players will be dropped. Type 'yes' to proceed") -ne 'yes') { Write-Host "Aborted."; break } }
+    if ($WarnSeconds -gt 0) {
+      Write-Host "Warning players with a $WarnSeconds s countdown..." -ForegroundColor Yellow
+      [void](Send-Broadcast 'Server Restart' "Restarting in $WarnSeconds seconds to apply settings - please reach safety." $WarnSeconds)
+      Start-Sleep -Seconds $WarnSeconds
+    }
     Dssh "sudo -n k3s kubectl delete pod -n $NS $pod --wait=false" | Out-Null
     Write-Host "Deleted $pod; the operator recreates it (same name, new instance)..." -ForegroundColor Cyan
     $deadline=(Get-Date).AddSeconds(240); $ok=$false
@@ -340,10 +383,18 @@ switch ($Action.ToLower()) {
     else { Write-Host "Timed out waiting for Ready; check '.\Wormageddon.ps1 status'." -ForegroundColor Red }
   }
 
+  'broadcast' {
+    if (-not $A1) { throw 'usage: Wormageddon broadcast "<message>" ["<title>"] [-Yes] [-DryRun]' }
+    $bTitle = if ($A2) { $A2 } else { 'Server' }
+    if ($DryRun) { [void](Send-Broadcast $bTitle $A1 30 -Preview); break }
+    if (-not $Yes) { if ((Read-Host "Send this in-game message to ALL online players? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    [void](Send-Broadcast $bTitle $A1 30)
+  }
+
   'ssh'  { if (-not $A1) { throw 'usage: Wormageddon ssh "<command>"' }; Dssh $A1 }
 
   default {
-    Write-Host "Wormageddon.ps1 actions: status, shards, worms, show, get, set, unset, preset, backup, restart, ssh, help" -ForegroundColor Cyan
+    Write-Host "Wormageddon.ps1 actions: status, shards, worms, show, get, set, unset, preset, backup, restart, broadcast, ssh, help" -ForegroundColor Cyan
     Write-Host "Connection comes from dune-connection.json. Full usage is in this file's header and the README."
   }
 }

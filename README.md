@@ -137,7 +137,8 @@ powershell -ExecutionPolicy Bypass -File .\Wormageddon.ps1 show
 | `unset <Group> <Key> [-Shard S]` | Remove one override (revert that key to default) |
 | `preset <Name> [-Shard S]` | Apply a curated bundle from `presets.json` (auto-backup) |
 | `backup [-Shard S]` | Save a timestamped copy of `UserGame.ini` to `.\backups` |
-| `restart [-Shard S] [-Yes]` | Restart one shard so pending changes take effect |
+| `restart [-Shard S] [-WarnSeconds N] [-Yes]` | Restart one shard so pending changes take effect (`-WarnSeconds N` broadcasts a countdown to players first) |
+| `broadcast "<msg>" ["<title>"]` | Send an in-game message to all players (optional — needs the `dune-server-service` daemon; see [docs/LIVE-COMMANDS.md](docs/LIVE-COMMANDS.md)) |
 | `ssh "<cmd>"` | Run a raw shell command on the VM (advanced/debug) |
 
 **Groups** map to UE5 ini sections: `Sandworm`, `TimeOfDay`, `Building`,
@@ -149,8 +150,13 @@ powershell -ExecutionPolicy Bypass -File .\Wormageddon.ps1 show
 ## The dials (worm sign & threat highlights)
 
 These live in the **Sandworm** group (`[/Script/DuneSandbox.SandwormSettings]`).
-Full table of every setting — storms, harvest, day length, hydration, PvP drop —
-is in [docs/SETTINGS_REFERENCE.md](docs/SETTINGS_REFERENCE.md).
+The full per-action **threat matrix** (walking / running / crouching / sprinting /
+hyper-sprinting / dashing / suspensor-hover / shielding / vehicle-shield /
+drum-sand), the giant-worm block, storms, harvest, day length, hydration, and the
+PvP-drop dial are all in [docs/SETTINGS_REFERENCE.md](docs/SETTINGS_REFERENCE.md)
+— **every key and default there is verified against the live shipped
+`DefaultGame.ini`.** There's also a master `m_EnableSandwormSystem` toggle
+(CLI-only, since it's an enum).
 
 | Setting | Default | What it does |
 |---|---:|---|
@@ -186,6 +192,10 @@ demand by a single spice harvester.
   or warn them. The CLI asks for confirmation unless you pass `-Yes`.
 - `dune-connection.json` (your server IP, key path, optional password) is
   **git-ignored** — it never leaves your PC.
+- **Warn players before you restart:** `restart -WarnSeconds 60` (or
+  `broadcast "..."`) sends an in-game countdown so a worm-tuning restart isn't a
+  surprise — optional, and needs the `dune-server-service` daemon on your server
+  (see [docs/LIVE-COMMANDS.md](docs/LIVE-COMMANDS.md)).
 
 More in [docs/SAFETY.md](docs/SAFETY.md).
 
