@@ -25,9 +25,10 @@ Its heart is the dials that make sandworms and the world *feel* different: how
 aggressively worms hunt you, how much "threat" each action generates, how dense
 the worms are, when the giant **Shai-Hulud** erupts, plus storm / harvest /
 day-length knobs. Around that it adds a **Server** tab (status, players,
-start / stop / restart / update) and an **Admin** tab (live in-game commands —
-broadcast, give item, teleport, kick, award XP, spawn vehicle), so one window
-covers day-to-day operation of a solo server.
+start / stop / restart / update), an **Admin** tab (live in-game commands —
+broadcast, give item, teleport, kick, award XP, spawn vehicle), and a **Bases**
+tab (back up a player's build to a file, and restore it), so one window covers
+day-to-day operation of a solo server.
 
 > [!IMPORTANT]
 > **Unofficial fan tool.** Wormageddon is not affiliated with, endorsed by, or
@@ -187,6 +188,16 @@ powershell -ExecutionPolicy Bypass -File .\Wormageddon.ps1 show
 | `spawn <PlayerId> <ClassName> <X> <Y> <Z>` | Spawn a vehicle |
 | `publish <Command> '<json>'` | Send any daemon command (escape hatch) |
 | `ssh "<cmd>"` | Raw shell command on the VM (advanced/debug) |
+
+**Bases — back up / restore player builds** (need `DbPassword` in config):
+
+| Action | What it does |
+|---|---|
+| `bases` | List bases (building_id / owner / piece + placeable counts) |
+| `base-export <building_id> [file]` | Back up a live base to a `.json` (read-only) |
+| `base-import <file> <PlayerId>` | **(planned)** Restore a base to a player as a Solido Replicator — a guarded live write; see [docs/BASES.md](docs/BASES.md) |
+
+See [docs/BASES.md](docs/BASES.md).
 
 Add **`-DryRun`** to preview any command's exact payload without sending; **`-Yes`**
 skips confirmations. Full daemon + command details: [docs/LIVE-COMMANDS.md](docs/LIVE-COMMANDS.md).

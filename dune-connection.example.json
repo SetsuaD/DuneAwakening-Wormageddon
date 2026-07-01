@@ -6,10 +6,17 @@
   "KeyPath": "C:\\path\\to\\your\\sshKey",
   "Password": "",
 
-  "_optional": "Everything below is optional. Namespace/Shards auto-detect if blank. JumpHost routes SSH through a bastion (ssh -J, key auth only), e.g. \"owner@gateway\". BattlegroupBin / DashboardUrl only need changing on a non-standard install.",
+  "_optional": "Optional. Namespace/Shards auto-detect if blank. JumpHost routes SSH through a bastion (ssh -J, key auth), e.g. \"owner@gateway\". BattlegroupBin / DashboardUrl only change on a non-standard install.",
   "Namespace": "",
   "Shards": [],
   "JumpHost": "",
   "BattlegroupBin": "/home/dune/.dune/bin/battlegroup",
-  "DashboardUrl": "http://127.0.0.1:29187"
+  "DashboardUrl": "http://127.0.0.1:29187",
+
+  "_db": "Only needed for the Bases backup/restore feature (bases / base-export / base-import). DbPassword is the game Postgres password; DbUser/DbName/DbPort/DbPod default to postgres / dune / 15432 / auto-detect. Leave DbPassword blank to disable the base feature.",
+  "DbPassword": "",
+  "DbUser": "postgres",
+  "DbName": "dune",
+  "DbPort": 15432,
+  "DbPod": ""
 }

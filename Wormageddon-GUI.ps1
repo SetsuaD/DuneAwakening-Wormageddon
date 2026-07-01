@@ -372,6 +372,38 @@ $btnAdSend.Add_Click({
 })
 if ($cboCmd.Items.Count -gt 0){ $cboCmd.SelectedIndex=0 }
 
+# ==========================================================================
+# BASES tab - back up a live base to a JSON file (the "Solido Replicator"
+# export). Read-only. Restore/import is CLI + experimental (see docs).
+# ==========================================================================
+$tpBases = New-Object System.Windows.Forms.TabPage; $tpBases.Text='Bases'; $tpBases.BackColor=[System.Drawing.Color]::White
+$pnBases = New-Object System.Windows.Forms.Panel; $pnBases.Dock='Fill'
+$btnBsList   = New-Object System.Windows.Forms.Button; $btnBsList.Text='List bases'; $btnBsList.Location='8,8'; $btnBsList.Width=100
+$btnBsExport = New-Object System.Windows.Forms.Button; $btnBsExport.Text='Back up selected base -> file'; $btnBsExport.Location='114,8'; $btnBsExport.Width=190
+$lstBases = New-Object System.Windows.Forms.ListBox; $lstBases.Location='8,42'; $lstBases.Size=New-Object System.Drawing.Size(700,368); $lstBases.Font=New-Object System.Drawing.Font('Consolas',9); $lstBases.Anchor='Top, Bottom, Left, Right'
+$lblBsNote = New-Object System.Windows.Forms.Label; $lblBsNote.Text='Backs up a live base (buildings + placeables) to a .json in the "bases" folder. Needs DbPassword in dune-connection.json. Restore/import is planned (a guarded live write - see docs/BASES.md).'; $lblBsNote.Location='8,416'; $lblBsNote.MaximumSize=New-Object System.Drawing.Size(700,0); $lblBsNote.AutoSize=$true; $lblBsNote.ForeColor=[System.Drawing.Color]::DimGray; $lblBsNote.Anchor='Bottom, Left, Right'
+$pnBases.Controls.AddRange(@($btnBsList,$btnBsExport,$lstBases,$lblBsNote))
+$tpBases.Controls.Add($pnBases); [void]$tc.TabPages.Add($tpBases)
+
+$btnBsList.Add_Click({
+  Log 'Listing bases...'; $lstBases.Items.Clear()
+  foreach ($ln in ((Invoke-Dune @('bases')) -split "`r?`n")) {
+    if ($ln -match '^\s*(-?\d+)\|(-?\d+)\|(\d+)\|(\d+)') {
+      $item = New-Object PSObject -Property @{ Bid=$Matches[1]; Disp=("base {0,-6}  {1,4} pieces  {2,3} placeables  (owner {3})" -f $Matches[1],$Matches[3],$Matches[4],$Matches[2]) }
+      $item | Add-Member ScriptMethod ToString { $this.Disp } -Force
+      [void]$lstBases.Items.Add($item)
+    }
+  }
+  Log "Found $($lstBases.Items.Count) base(s). Select one and click 'Back up selected base'."
+})
+$btnBsExport.Add_Click({
+  $sel=$lstBases.SelectedItem
+  if (-not $sel) { Log 'Select a base in the list first (click "List bases").'; return }
+  Log "Backing up base $($sel.Bid)..."
+  $r = Invoke-Dune @('base-export',$sel.Bid)
+  Log (($r | Out-String).Trim())
+})
+
 # Activity log strip at the bottom.
 $log = New-Object System.Windows.Forms.TextBox
 $log.Multiline=$true; $log.ReadOnly=$true; $log.ScrollBars='Vertical'; $log.Location='14,682'; $log.Size=New-Object System.Drawing.Size(720,96); $log.BackColor=[System.Drawing.Color]::Black; $log.ForeColor=[System.Drawing.Color]::Lime; $log.Font=New-Object System.Drawing.Font('Consolas',8); $log.Anchor='Bottom, Left, Right'
@@ -532,7 +564,7 @@ $form.Add_Shown({
 if ($SelfTest) {
   Load-PresetList
   if ($cboCmd.Items.Count -gt 0){ $cboCmd.SelectedIndex=0; Build-AdminFields }
-  Write-Host "SELFTEST OK: $($tc.TabPages.Count) tabs ($($SETTINGS.Count) settings + Server + Admin), $($cboPreset.Items.Count) preset(s), $($cboCmd.Items.Count) admin command(s)"
+  Write-Host "SELFTEST OK: $($tc.TabPages.Count) tabs ($($SETTINGS.Count) settings + Server + Admin + Bases), $($cboPreset.Items.Count) preset(s), $($cboCmd.Items.Count) admin command(s)"
   $form.Dispose(); return
 }
 [void]$form.ShowDialog()
