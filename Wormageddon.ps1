@@ -127,6 +127,13 @@ $KH      = Join-Path $PSScriptRoot 'dune_known_hosts'   # per-tool known_hosts (
 # Server management CLI on the VM + the dune-server-service daemon's loopback API.
 $BGBIN   = if ("$($conn.BattlegroupBin)".Trim()) { "$($conn.BattlegroupBin)".Trim() } else { '/home/dune/.dune/bin/battlegroup' }
 $DASH    = if ("$($conn.DashboardUrl)".Trim()) { "$($conn.DashboardUrl)".Trim() } else { 'http://127.0.0.1:29187' }
+# Game Postgres (only needed for the base backup/restore feature). Password has
+# no default - set DbPassword in dune-connection.json to enable `bases`/base-*.
+$DBPASS  = "$($conn.DbPassword)"
+$DBUSER  = if ("$($conn.DbUser)".Trim()) { "$($conn.DbUser)".Trim() } else { 'postgres' }
+$DBNAME  = if ("$($conn.DbName)".Trim()) { "$($conn.DbName)".Trim() } else { 'dune' }
+$DBPORT  = if ("$($conn.DbPort)") { [int]$conn.DbPort } else { 15432 }
+$DBPOD   = "$($conn.DbPod)".Trim()
 
 # Friendly group name -> real UE5 ini section. Pass any of these as <Group>,
 # or a full "/Script/..." section string to reach a section not listed here.
@@ -293,6 +300,41 @@ function Send-Broadcast([string]$Title,[string]$Body,[int]$Duration=30,[switch]$
 function Battlegroup([string]$sub) {
   # Funcom battlegroup lifecycle CLI on the VM (list/status/start/stop/restart/update). Runs as the game user.
   return (Dssh "$BGBIN $sub")
+}
+
+# --------------------------------------------------------------------------
+# Game-database access (base backup/restore only).
+# Runs psql INSIDE the Postgres pod via kubectl exec. The SQL is base64'd and
+# fed to psql on stdin (-f -), so there are NO shell/quoting hazards no matter
+# what the SQL contains. Reads are safe; writes are gated behind confirmations.
+# --------------------------------------------------------------------------
+function Get-DbPod {
+  if ($DBPOD) { return $DBPOD }
+  $p = Dssh "sudo -n k3s kubectl get pods -n $NS -o name 2>/dev/null | grep -- '-db-dbdepl-sts' | head -1 | sed 's#pod/##'"
+  return ("$p").Trim()
+}
+function Db([string]$sql) {
+  if (-not $DBPASS) { throw "Base backup/restore needs 'DbPassword' in dune-connection.json (the game Postgres password)." }
+  $pod = Get-DbPod
+  if (-not $pod) { throw "Could not find the DB pod (…-db-dbdepl-sts-0) in namespace $NS." }
+  $b = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sql))
+  $inner = "sh -c 'echo $b | base64 -d | env PGPASSWORD=$DBPASS psql -h 127.0.0.1 -p $DBPORT -U $DBUSER -d $DBNAME -At -F\"|\" -f -'"
+  return (Dssh "sudo -n k3s kubectl exec -n $NS $pod -- $inner")
+}
+# Parse a building_instances.transform array "[0:6]={x,y,z,qx,qy,qz,qw}" -> 7 doubles.
+function Parse-ArrTransform([string]$s) {
+  if ($s -match '\{([^}]*)\}') { return @($matches[1] -split ',' | ForEach-Object { [double]$_ }) }
+  return @(0,0,0,0,0,0,1)
+}
+# Parse an actors.transform composite ("(x,y,z)","(qx,qy,qz,qw)") -> 7 doubles [x,y,z,qx,qy,qz,qw].
+function Parse-ActorTransform([string]$s) {
+  $groups = [regex]::Matches($s, '\(([-0-9eE.,\s]+)\)')
+  $pos=@(0,0,0); $quat=@(0,0,0,1)
+  foreach ($g in $groups) {
+    $nums = @($g.Groups[1].Value -split ',' | ForEach-Object { [double]($_.Trim()) })
+    if ($nums.Count -eq 3) { $pos = $nums } elseif ($nums.Count -eq 4) { $quat = $nums }
+  }
+  return @($pos[0],$pos[1],$pos[2],$quat[0],$quat[1],$quat[2],$quat[3])
 }
 
 # --------------------------------------------------------------------------
@@ -481,6 +523,42 @@ switch ($Action.ToLower()) {
     if ($DryRun) { [void](Daemon-Publish $A1 $fields -Preview); break }
     if (-not $Yes) { if ((Read-Host "Publish '$A1' to the live server? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
     [void](Daemon-Publish $A1 $fields)
+  }
+
+  # -------- Bases tab: backup (export) & restore (import) buildings --------
+  'bases' {
+    Write-Host "Bases (building_id | owner_entity_id | pieces | placeables):" -ForegroundColor Cyan
+    Db "SELECT bi.building_id, bi.owner_entity_id, count(*) AS pieces, (SELECT count(*) FROM dune.placeables p WHERE p.owner_entity_id=bi.owner_entity_id) AS placeables FROM dune.building_instances bi GROUP BY 1,2 ORDER BY pieces DESC"
+  }
+
+  'base-export' {
+    # Read-only: dump a live base (building pieces + placeables) to a JSON file
+    # you can archive, inspect, or later restore with base-import.
+    if (-not $A1) { throw 'usage: Wormageddon base-export <building_id> [outfile.json]' }
+    $bid = [long]$A1
+    $owner = ("$(Db "SELECT owner_entity_id FROM dune.building_instances WHERE building_id=$bid LIMIT 1")").Trim()
+    if (-not $owner) { throw "No base found with building_id=$bid (run 'bases')." }
+    $pieces = @()
+    foreach ($ln in ((Db "SELECT instance_id, building_type, transform, building_flags, health FROM dune.building_instances WHERE building_id=$bid ORDER BY instance_id") -split "`n")) {
+      if (-not $ln.Trim()) { continue }
+      $f = $ln -split '\|'; $t = Parse-ArrTransform $f[2]
+      $pieces += [ordered]@{ instance_id=[int]$f[0]; building_type=$f[1]; x=$t[0]; y=$t[1]; z=$t[2]; qx=$t[3]; qy=$t[4]; qz=$t[5]; qw=$t[6]; flags=[int]$f[3]; health=[double]$f[4] }
+    }
+    $placeables = @()
+    foreach ($ln in ((Db "SELECT p.id, p.building_type, coalesce(p.is_hologram,false), a.transform FROM dune.placeables p JOIN dune.actors a ON a.id=p.id WHERE p.owner_entity_id=$owner ORDER BY p.id") -split "`n")) {
+      if (-not $ln.Trim()) { continue }
+      $f = $ln -split '\|'; $t = Parse-ActorTransform $f[3]
+      $placeables += [ordered]@{ id=[int]$f[0]; building_type=$f[1]; hologram=($f[2] -eq 't'); x=$t[0]; y=$t[1]; z=$t[2]; qx=$t[3]; qy=$t[4]; qz=$t[5]; qw=$t[6] }
+    }
+    $obj = [ordered]@{
+      format='wormageddon-base/1'; building_id=$bid; owner_entity_id=[long]$owner
+      exported=(Get-Date).ToString('s'); piece_count=$pieces.Count; placeable_count=$placeables.Count
+      pieces=$pieces; placeables=$placeables
+    }
+    $out = if ($A2) { $A2 } else { Join-Path $PSScriptRoot ("bases\base_{0}.{1}.json" -f $bid,(Get-Date -Format 'yyyyMMdd-HHmmss')) }
+    New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+    ($obj | ConvertTo-Json -Depth 6) | Set-Content -LiteralPath $out -Encoding UTF8
+    Write-Host "Exported base ${bid}: $($pieces.Count) pieces + $($placeables.Count) placeables -> $out" -ForegroundColor Green
   }
 
   'ssh'  { if (-not $A1) { throw 'usage: Wormageddon ssh "<command>"' }; Dssh $A1 }
