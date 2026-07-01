@@ -318,8 +318,9 @@ function Db([string]$sql) {
   $pod = Get-DbPod
   if (-not $pod) { throw "Could not find the DB pod (…-db-dbdepl-sts-0) in namespace $NS." }
   $b = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sql))
-  $inner = "sh -c 'echo $b | base64 -d | env PGPASSWORD=$DBPASS psql -h 127.0.0.1 -p $DBPORT -U $DBUSER -d $DBNAME -At -F\"|\" -f -'"
-  return (Dssh "sudo -n k3s kubectl exec -n $NS $pod -- $inner")
+  # base64-decode the SQL and pipe it into psql's stdin (-f -) via `kubectl exec -i`.
+  # No inner `sh -c`, no nested quotes -> robust regardless of what the SQL contains.
+  return (Dssh "echo $b | base64 -d | sudo -n k3s kubectl exec -i -n $NS $pod -- env PGPASSWORD=$DBPASS psql -h 127.0.0.1 -p $DBPORT -U $DBUSER -d $DBNAME -At -F '|' -f -")
 }
 # Parse a building_instances.transform array "[0:6]={x,y,z,qx,qy,qz,qw}" -> 7 doubles.
 function Parse-ArrTransform([string]$s) {
