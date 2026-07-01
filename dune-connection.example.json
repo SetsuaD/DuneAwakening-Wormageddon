@@ -1,10 +1,15 @@
 {
-  "_comment": "Copy this file to 'dune-connection.json' (same folder) and fill in YOUR server. dune-connection.json is git-ignored so your details never get committed. You can also create it from the GUI's 'Connect to Server' dialog instead of editing by hand.",
+  "_comment": "Copy this to 'dune-connection.json' (same folder) and fill in YOUR server. dune-connection.json is git-ignored so your details never get committed. You can also create it from the GUI's 'Connect to Server' dialog. Only Host + (KeyPath or Password) are required; the rest are optional.",
 
   "Host": "YOUR.DUNE.SERVER.IP",
   "User": "dune",
   "KeyPath": "C:\\path\\to\\your\\sshKey",
   "Password": "",
+
+  "_optional": "Everything below is optional. Namespace/Shards auto-detect if blank. JumpHost routes SSH through a bastion (ssh -J, key auth only), e.g. \"owner@gateway\". BattlegroupBin / DashboardUrl only need changing on a non-standard install.",
   "Namespace": "",
-  "Shards": []
+  "Shards": [],
+  "JumpHost": "",
+  "BattlegroupBin": "/home/dune/.dune/bin/battlegroup",
+  "DashboardUrl": "http://127.0.0.1:29187"
 }

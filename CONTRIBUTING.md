@@ -64,8 +64,11 @@ key, or credential.
 
 ## Scope
 
-Wormageddon intentionally does **not** grow into a general server manager (that's
-[dune-admin](https://github.com/Icehunter/dune-admin) /
-[DDSM](https://github.com/adainrivers/dune-dedicated-server-manager)). PRs that
-keep it a small, sharp worm/threat tuner are far more likely to merge than ones
-that add lifecycle, in-game admin, or a web server.
+Wormageddon is a **zero-install, single-operator command center on Windows**:
+worm/threat tuning (its specialty), server lifecycle, and live in-game admin —
+with nothing to host and no paid dependencies. It intentionally stays out of the
+**multi-user / web / community** space (Discord auth, battlepass, market, RBAC,
+a hosted web UI) — that's what [dune-admin](https://github.com/Icehunter/dune-admin)
+and [DDSM](https://github.com/adainrivers/dune-dedicated-server-manager) are for.
+PRs that deepen the solo-operator experience are welcome; ones that turn it into a
+hosted multi-tenant web platform are out of scope.

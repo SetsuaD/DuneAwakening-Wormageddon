@@ -39,6 +39,12 @@
     restart [-Shard S] [-WarnSeconds N] [-Yes] restart ONE shard (changes take effect);
                                              -WarnSeconds N broadcasts a countdown first
     broadcast "<msg>" ["<title>"] [-Yes]     send an in-game message to all players (needs daemon)
+    players | commands                       list players / the commands the daemon accepts (read-only)
+    start | stop | update [-Yes]             battlegroup lifecycle (disruptive - confirm)
+    give <P> <Item> [n] | xp <P> <amt>       live in-game admin via the daemon (needs daemon)
+    kick <P> | teleport <P> <X> <Y> <Z>        "
+    spawn <P> <Class> <X> <Y> <Z>              "
+    publish <Command> '<json-fields>'        send ANY daemon command (escape hatch)
     ssh     "<cmd>"                          run a raw shell command on the VM (advanced/debug)
     help
 
@@ -64,6 +70,8 @@ param(
   [Parameter(Position=1)][string]$A1,
   [Parameter(Position=2)][string]$A2,
   [Parameter(Position=3)][string]$A3,
+  [Parameter(Position=4)][string]$A4,
+  [Parameter(Position=5)][string]$A5,
   [string]$Shard = 'Survival_1',
   [int]$WarnSeconds = 0,
   [switch]$DryRun,
@@ -77,9 +85,12 @@ if ($Action.ToLower() -in @('help','-h','--help','/?','')) {
   Write-Host "Wormageddon - Dune: Awakening worm-sign / threat tuner (CLI)" -ForegroundColor Cyan
   Write-Host "Usage: powershell -ExecutionPolicy Bypass -File .\Wormageddon.ps1 <action> [args] [-Shard <Map>]"
   Write-Host ""
-  Write-Host "Actions: status | shards | worms | show | get <Key> | set <Group> <Key> <Value> |"
-  Write-Host "         unset <Group> <Key> | preset <Name> | backup | restart [-WarnSeconds N] [-Yes] |"
-  Write-Host "         broadcast ""<msg>"" | ssh ""<cmd>"" | help"
+  Write-Host "Settings: status | shards | worms | show | get <Key> | set <Group> <Key> <Value> |"
+  Write-Host "          unset <Group> <Key> | preset <Name> | backup | restart [-WarnSeconds N] [-Yes]"
+  Write-Host "Server  : players | commands | start | stop | update"
+  Write-Host "Admin   : broadcast ""<msg>"" | give <P> <Item> [n] | xp <P> <amt> | kick <P> |"
+  Write-Host "          teleport <P> <X> <Y> <Z> | spawn <P> <Class> <X> <Y> <Z> | publish <Cmd> '<json>'"
+  Write-Host "Other   : ssh ""<cmd>"" | help      (add -DryRun to preview; -Yes skips confirmations)"
   Write-Host "Groups : Sandworm TimeOfDay Building GameMode Pvp Security Storm Harvest FlourSand Hydration"
   Write-Host ""
   Write-Host "Connection comes from dune-connection.json (copy dune-connection.example.json)."
@@ -102,6 +113,7 @@ $VMHOST = "$($conn.Host)".Trim()
 $VMUSER = if ("$($conn.User)".Trim()) { "$($conn.User)".Trim() } else { 'dune' }
 $KEYP   = "$($conn.KeyPath)".Trim()
 $PW     = "$($conn.Password)"
+$JUMP   = "$($conn.JumpHost)".Trim()   # optional bastion for `ssh -J` (e.g. "owner@gateway"); needs key auth
 if (-not $VMHOST) { throw "dune-connection.json has no 'Host'." }
 if (-not $KEYP -and -not $PW) { throw "dune-connection.json needs either 'KeyPath' (an SSH private key) or 'Password'." }
 
@@ -112,6 +124,9 @@ $UGDIR   = '/home/dune/server/DuneSandbox/Saved/UserSettings'
 $UG      = "$UGDIR/UserGame.ini"
 $GAMECFG = '/home/dune/server/DuneSandbox/Config/DefaultGame.ini'
 $KH      = Join-Path $PSScriptRoot 'dune_known_hosts'   # per-tool known_hosts (auto-managed)
+# Server management CLI on the VM + the dune-server-service daemon's loopback API.
+$BGBIN   = if ("$($conn.BattlegroupBin)".Trim()) { "$($conn.BattlegroupBin)".Trim() } else { '/home/dune/.dune/bin/battlegroup' }
+$DASH    = if ("$($conn.DashboardUrl)".Trim()) { "$($conn.DashboardUrl)".Trim() } else { 'http://127.0.0.1:29187' }
 
 # Friendly group name -> real UE5 ini section. Pass any of these as <Group>,
 # or a full "/Script/..." section string to reach a section not listed here.
@@ -134,7 +149,10 @@ function Dssh([string]$cmd) {
   $b = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cmd))
   $remote = "echo $b | base64 -d | sh"
   if ($KEYP) {
-    & ssh -i $KEYP -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$KH" -o ConnectTimeout=12 "$VMUSER@$VMHOST" $remote 2>&1
+    $sshArgs = @('-i', $KEYP, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', "UserKnownHostsFile=$KH", '-o', 'ConnectTimeout=12')
+    if ($JUMP) { $sshArgs += @('-J', $JUMP) }   # optional bastion / ProxyJump
+    $sshArgs += @("$VMUSER@$VMHOST", $remote)
+    & ssh @sshArgs 2>&1
   } else {
     $plink = (Get-Command plink.exe -ErrorAction SilentlyContinue).Source
     if (-not $plink -and (Test-Path 'C:\Program Files\PuTTY\plink.exe')) { $plink = 'C:\Program Files\PuTTY\plink.exe' }
@@ -238,31 +256,43 @@ function Resolve-Section([string]$group) {
 }
 
 # --------------------------------------------------------------------------
-# Send-Broadcast - show an in-game message to all players.
-# Unlike the settings actions, this is a LIVE command (no restart). It uses the
-# optional `dune-server-service` daemon's loopback HTTP API on the VM
-# (:29187 /api/admin/publish), which builds the RabbitMQ envelope for us. The
-# daemon ships with the Dune Dedicated Server Manager; if it's not running, this
-# returns a clear error and nothing else is affected. We post the JSON body by
-# base64'ing it onto the VM (avoids any quoting problems) and curl --data @file.
-# Returns $true on a confirmed publish, else $false.
+# Live-command helpers (the "Server" + "Admin" side of the hub).
+# These talk to the optional `dune-server-service` daemon's loopback HTTP API on
+# the VM (:29187) - it builds the RabbitMQ envelope and injects commands into the
+# running game with no restart. The daemon ships with the Dune Dedicated Server
+# Manager; if it isn't running, these return a clear error and the settings side
+# of the tool is unaffected. Read endpoints are safe anytime; write/commands
+# affect live players, so callers confirm first.
 # --------------------------------------------------------------------------
-function Send-Broadcast([string]$Title,[string]$Body,[int]$Duration=30,[switch]$Preview) {
-  $payload = @{ command='ServiceBroadcast'; fields=@{ BroadcastType='Generic'; Title=$Title; Body=$Body; BroadcastDuration=$Duration } } | ConvertTo-Json -Compress
+function Daemon-Get([string]$path) {
+  # GET a read-only daemon endpoint (loopback, so reached over SSH). Raw text.
+  return (Dssh "curl -s -m 8 $DASH$path")
+}
+function Daemon-Publish([string]$Command,[hashtable]$Fields,[switch]$Preview) {
+  # POST a live command to /api/admin/publish. We base64 the JSON body onto the
+  # VM (no quoting headaches) and curl --data @file. Returns $true on 200/202.
+  $payload = @{ command=$Command; fields=$Fields } | ConvertTo-Json -Compress
   if ($Preview) {
-    Write-Host "[dry-run] would POST to the daemon at http://127.0.0.1:29187/api/admin/publish :" -ForegroundColor DarkGray
+    Write-Host "[dry-run] POST $DASH/api/admin/publish :" -ForegroundColor DarkGray
     Write-Host "  $payload"
     return $true
   }
   $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
-  $remote = "echo $b64 | base64 -d > /tmp/wm_bcast.json; " +
-            "curl -s -m 8 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' " +
-            "--data @/tmp/wm_bcast.json http://127.0.0.1:29187/api/admin/publish; " +
-            "rm -f /tmp/wm_bcast.json"
+  $remote = "echo $b64 | base64 -d > /tmp/wm_cmd.json; " +
+            "curl -s -m 12 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' " +
+            "--data @/tmp/wm_cmd.json $DASH/api/admin/publish; rm -f /tmp/wm_cmd.json"
   $code = ("$(Dssh $remote)").Trim()
-  if ($code -eq '200' -or $code -eq '202') { Write-Host "Broadcast sent (HTTP $code)." -ForegroundColor Green; return $true }
-  Write-Host "Broadcast failed (HTTP '$code'). Is the dune-server-service daemon running on the VM (:29187)?" -ForegroundColor Red
+  if ($code -eq '200' -or $code -eq '202') { Write-Host "OK - $Command (HTTP $code)." -ForegroundColor Green; return $true }
+  Write-Host "$Command failed (HTTP '$code'). Is the dune-server-service daemon running on the VM ($DASH)?" -ForegroundColor Red
   return $false
+}
+function Send-Broadcast([string]$Title,[string]$Body,[int]$Duration=30,[switch]$Preview) {
+  # The most common live command: an on-screen message to all players.
+  return (Daemon-Publish 'ServiceBroadcast' @{ BroadcastType='Generic'; Title=$Title; Body=$Body; BroadcastDuration=$Duration } -Preview:$Preview)
+}
+function Battlegroup([string]$sub) {
+  # Funcom battlegroup lifecycle CLI on the VM (list/status/start/stop/restart/update). Runs as the game user.
+  return (Dssh "$BGBIN $sub")
 }
 
 # --------------------------------------------------------------------------
@@ -391,10 +421,76 @@ switch ($Action.ToLower()) {
     [void](Send-Broadcast $bTitle $A1 30)
   }
 
+  # -------- Server tab: read + lifecycle --------
+  'players'  { Write-Host "Players:" -ForegroundColor Cyan; Daemon-Get '/api/admin/players' }
+  'commands' { Write-Host "Live commands the daemon accepts:" -ForegroundColor Cyan; Daemon-Get '/api/admin/commands' }
+  'start' {
+    if (-not $Yes) { if ((Read-Host "Start the battlegroup? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    Write-Host "Starting battlegroup..." -ForegroundColor Cyan; Battlegroup 'start'
+  }
+  'stop' {
+    Write-Host "WARNING: stopping drops ALL players; the survival shard can hang on graceful stop." -ForegroundColor Yellow
+    if (-not $Yes) { if ((Read-Host "Type 'stop' to confirm") -ne 'stop') { Write-Host 'Aborted.'; break } }
+    Write-Host "Stopping battlegroup..." -ForegroundColor Cyan; Battlegroup 'stop'
+  }
+  'update' {
+    if (-not $Yes) { if ((Read-Host "Update the server (can restart it)? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    Write-Host "Updating..." -ForegroundColor Cyan; Battlegroup 'update'
+  }
+
+  # -------- Admin tab: live in-game commands (via the daemon) --------
+  'give' {
+    if (-not $A1 -or -not $A2) { throw 'usage: Wormageddon give <PlayerId|*> <ItemName> [Quantity]' }
+    $f = @{ PlayerId=$A1; ItemName=$A2; Quantity=$(if ($A3) { [int]$A3 } else { 1 }) }
+    if ($DryRun) { [void](Daemon-Publish 'AddItemToInventory' $f -Preview); break }
+    if (-not $Yes) { if ((Read-Host "Give $($f.Quantity) x $A2 to $A1? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    [void](Daemon-Publish 'AddItemToInventory' $f)
+  }
+  'kick' {
+    if (-not $A1) { throw 'usage: Wormageddon kick <PlayerId|*>' }
+    if (-not $Yes) { if ((Read-Host "Kick $A1? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    [void](Daemon-Publish 'KickPlayer' @{ PlayerId=$A1 })
+  }
+  'xp' {
+    if (-not $A1 -or -not $A2) { throw 'usage: Wormageddon xp <PlayerId> <Amount>' }
+    $f = @{ PlayerId=$A1; Experience=[int]$A2 }
+    if ($DryRun) { [void](Daemon-Publish 'AwardXP' $f -Preview); break }
+    if (-not $Yes) { if ((Read-Host "Award $A2 XP to $A1? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    [void](Daemon-Publish 'AwardXP' $f)
+  }
+  'teleport' {
+    if (-not $A1 -or -not $A2 -or -not $A3 -or [string]::IsNullOrEmpty($A4)) { throw 'usage: Wormageddon teleport <PlayerId> <X> <Y> <Z>' }
+    $f = @{ PlayerId=$A1; X=[double]$A2; Y=[double]$A3; Z=[double]$A4 }
+    if ($DryRun) { [void](Daemon-Publish 'TeleportTo' $f -Preview); break }
+    if (-not $Yes) { if ((Read-Host "Teleport $A1 to ($A2,$A3,$A4)? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    [void](Daemon-Publish 'TeleportTo' $f)
+  }
+  'spawn' {
+    if (-not $A1 -or -not $A2 -or -not $A3 -or [string]::IsNullOrEmpty($A4) -or [string]::IsNullOrEmpty($A5)) { throw 'usage: Wormageddon spawn <PlayerId> <ClassName> <X> <Y> <Z>' }
+    $f = @{ PlayerId=$A1; ClassName=$A2; X=[double]$A3; Y=[double]$A4; Z=[double]$A5 }
+    if ($DryRun) { [void](Daemon-Publish 'SpawnVehicleAt' $f -Preview); break }
+    if (-not $Yes) { if ((Read-Host "Spawn $A2 for $A1? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    [void](Daemon-Publish 'SpawnVehicleAt' $f)
+  }
+  'publish' {
+    # Generic escape hatch: send ANY daemon command with JSON fields.
+    #   Wormageddon publish KickPlayer "{\"PlayerId\":\"*\"}"
+    if (-not $A1) { throw 'usage: Wormageddon publish <Command> ''<json-fields>'' [-DryRun] [-Yes]' }
+    $fields = @{}
+    if ($A2) { try { ($A2 | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $fields[$_.Name] = $_.Value } } catch { throw "fields must be valid JSON: $($_.Exception.Message)" } }
+    if ($DryRun) { [void](Daemon-Publish $A1 $fields -Preview); break }
+    if (-not $Yes) { if ((Read-Host "Publish '$A1' to the live server? Type 'yes'") -ne 'yes') { Write-Host 'Aborted.'; break } }
+    [void](Daemon-Publish $A1 $fields)
+  }
+
   'ssh'  { if (-not $A1) { throw 'usage: Wormageddon ssh "<command>"' }; Dssh $A1 }
 
   default {
-    Write-Host "Wormageddon.ps1 actions: status, shards, worms, show, get, set, unset, preset, backup, restart, broadcast, ssh, help" -ForegroundColor Cyan
+    Write-Host "Wormageddon.ps1 actions:" -ForegroundColor Cyan
+    Write-Host "  settings: status shards worms show get set unset preset backup restart"
+    Write-Host "  server  : players commands start stop update"
+    Write-Host "  admin   : broadcast give xp kick teleport spawn publish"
+    Write-Host "  other   : ssh help"
     Write-Host "Connection comes from dune-connection.json. Full usage is in this file's header and the README."
   }
 }

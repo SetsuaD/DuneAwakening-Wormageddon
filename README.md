@@ -11,8 +11,9 @@
 
 # Wormageddon
 
-> A dead-simple, zero-install **worm-sign & threat-level tuner** for a self-hosted
-> **Dune: Awakening** dedicated server.
+> A dead-simple, zero-install **command center** for a self-hosted
+> **Dune: Awakening** dedicated server — tune the worms, manage the server, and
+> run live in-game admin, all from one window.
 
 Drag a few sliders, hit **APPLY + RESTART**, and the desert gets scarier (or
 calmer). Wormageddon edits the persistent `UserGame.ini` overrides on your Dune
@@ -20,10 +21,13 @@ server over SSH and restarts the affected shard so the change takes effect — n
 agent to install on the server, no service to host, no database to wire up. Just
 two PowerShell files on your Windows box.
 
-It is laser-focused on the dials that make sandworms and the world *feel*
-different: how aggressively worms hunt you, how much "threat" each action
-generates, how dense the worms are, when the giant **Shai-Hulud** erupts, plus a
-handful of storm / harvest / day-length knobs.
+Its heart is the dials that make sandworms and the world *feel* different: how
+aggressively worms hunt you, how much "threat" each action generates, how dense
+the worms are, when the giant **Shai-Hulud** erupts, plus storm / harvest /
+day-length knobs. Around that it adds a **Server** tab (status, players,
+start / stop / restart / update) and an **Admin** tab (live in-game commands —
+broadcast, give item, teleport, kick, award XP, spawn vehicle), so one window
+covers day-to-day operation of a solo server.
 
 > [!IMPORTANT]
 > **Unofficial fan tool.** Wormageddon is not affiliated with, endorsed by, or
@@ -39,10 +43,12 @@ handful of storm / harvest / day-length knobs.
 The big community admin tools — [adainrivers/dune-dedicated-server-manager](https://github.com/adainrivers/dune-dedicated-server-manager)
 (server lifecycle + in-game admin) and [Icehunter/dune-admin](https://github.com/Icehunter/dune-admin)
 (a full multi-provider web panel) — are excellent and do *far* more than this
-project. Wormageddon deliberately does **one thing**: it makes tuning *worm sign
-and threat* trivial, with curated presets and zero setup, for a single operator
-on Windows. If you want a full control plane, use one of those. If you just want
-to make the worms terrifying before tonight's session, you're in the right place.
+project — with multi-user web UIs, Discord auth, battlepass/market, and every
+hosting topology. Wormageddon aims narrower: a **zero-install, single-operator
+command center on Windows** covering what one admin actually reaches for — worm/
+threat tuning (its specialty), server lifecycle, and live in-game admin — with
+nothing to host and no paid dependencies. Want multi-user/community features?
+Use those. Want to run your own server solo from one window? You're set here.
 
 See the honest, detailed three-way breakdown in [docs/COMPARISON.md](docs/COMPARISON.md).
 
@@ -146,9 +152,11 @@ powershell -ExecutionPolicy Bypass -File .\Wormageddon.ps1 show
 
 ## CLI reference
 
+**Settings — worm/threat tuning:**
+
 | Action | What it does |
 |---|---|
-| `status` | Shards + players (Funcom serverstats) |
+| `status` | Battlegroup health + shards + players |
 | `shards` | List the running map/shard names |
 | `worms [-Shard S]` | Sandworm spawn count + shard uptime (warm-up check) |
 | `show [-Shard S]` | Print the shard's current `UserGame.ini` overrides |
@@ -157,9 +165,31 @@ powershell -ExecutionPolicy Bypass -File .\Wormageddon.ps1 show
 | `unset <Group> <Key> [-Shard S]` | Remove one override (revert that key to default) |
 | `preset <Name> [-Shard S]` | Apply a curated bundle from `presets.json` (auto-backup) |
 | `backup [-Shard S]` | Save a timestamped copy of `UserGame.ini` to `.\backups` |
-| `restart [-Shard S] [-WarnSeconds N] [-Yes]` | Restart one shard so pending changes take effect (`-WarnSeconds N` broadcasts a countdown to players first) |
-| `broadcast "<msg>" ["<title>"]` | Send an in-game message to all players (optional — needs the `dune-server-service` daemon; see [docs/LIVE-COMMANDS.md](docs/LIVE-COMMANDS.md)) |
-| `ssh "<cmd>"` | Run a raw shell command on the VM (advanced/debug) |
+| `restart [-Shard S] [-WarnSeconds N] [-Yes]` | Restart one shard so changes take effect (`-WarnSeconds N` warns players first) |
+
+**Server — lifecycle & status:**
+
+| Action | What it does |
+|---|---|
+| `players` | List players (name / online / id) |
+| `commands` | List the live commands the daemon accepts |
+| `start` · `stop` · `update` `[-Yes]` | Battlegroup lifecycle (disruptive — confirms first) |
+
+**Admin — live in-game commands** (need the `dune-server-service` daemon on the VM):
+
+| Action | What it does |
+|---|---|
+| `broadcast "<msg>" ["<title>"]` | On-screen message to all players |
+| `give <PlayerId> <ItemName> [Qty]` | Grant an item |
+| `xp <PlayerId> <Amount>` | Award XP |
+| `kick <PlayerId>` | Kick a player (`*` = everyone) |
+| `teleport <PlayerId> <X> <Y> <Z>` | Teleport a player |
+| `spawn <PlayerId> <ClassName> <X> <Y> <Z>` | Spawn a vehicle |
+| `publish <Command> '<json>'` | Send any daemon command (escape hatch) |
+| `ssh "<cmd>"` | Raw shell command on the VM (advanced/debug) |
+
+Add **`-DryRun`** to preview any command's exact payload without sending; **`-Yes`**
+skips confirmations. Full daemon + command details: [docs/LIVE-COMMANDS.md](docs/LIVE-COMMANDS.md).
 
 **Groups** map to UE5 ini sections: `Sandworm`, `TimeOfDay`, `Building`,
 `GameMode`, `Pvp`, `Security`, `Storm`, `Harvest`, `FlourSand`, `Hydration`

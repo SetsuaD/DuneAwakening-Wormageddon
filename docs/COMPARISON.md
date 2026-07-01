@@ -15,8 +15,8 @@ job: tuning worm-sign / threat (and a few related dials) with zero setup.
 | Topologies | k3s-over-SSH | k3s-over-SSH (Funcom `igw`) | AMP, kubectl, docker, local (4 providers) |
 | **Edit worm/threat gameplay settings** | ✅ its whole purpose | ❌ no settings editor | ✅ Server Settings tab |
 | Curated worm/threat presets | ✅ (+ SUMMON SHAI-HULUD) | ❌ | ❌ (generic schema editor) |
-| Server lifecycle (start/stop/restart/update) | restart-to-apply only | ✅ full + scheduled | ✅ |
-| In-game admin (give item, spawn, XP, teleport) | ❌ | ✅ (RabbitMQ) | ✅ (RabbitMQ + huge DB suite) |
+| Server lifecycle (start/stop/restart/update) | ✅ start/stop/restart/update | ✅ full + scheduled | ✅ |
+| In-game admin (give item, spawn, XP, teleport) | ✅ via the daemon API | ✅ (RabbitMQ) | ✅ (RabbitMQ + huge DB suite) |
 | Database tools (raw SQL, repair, backups) | ❌ | player lookup, welcome ledger | ✅ extensive |
 | Multi-user / auth | ❌ (your desktop) | ❌ (your desktop) | ✅ local + Discord, RBAC, audit |
 | Scheduling (restarts/backups) | ❌ | ✅ (bundled daemon) | ✅ |

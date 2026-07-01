@@ -176,7 +176,7 @@ function Show-ConnectDialog {
 # Main window.
 # --------------------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Wormageddon - Dune: Awakening Settings Tuner'
+$form.Text = 'Wormageddon - Dune: Awakening Command Center'
 $form.Size = New-Object System.Drawing.Size(760, 910)
 $form.StartPosition = 'CenterScreen'; $form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 $form.MinimumSize = New-Object System.Drawing.Size(720, 660)
@@ -205,6 +205,7 @@ HOW TO USE  -  tune worm sign & threat in 4 steps:
  2. LOAD    - pick a shard, then "Read current" for live values, OR choose a Preset (Calm / Standard / WORMAGEDDON).
  3. TUNE    - drag the sliders across the tabs; each has a plain-English description (On/Off sliders are toggles).
  4. APPLY   - "APPLY + RESTART" writes your changes and reboots that shard.  "RESTORE DEFAULTS" reverts only this tool's settings.
+ TABS      - the worm/settings tabs tune the game; the SERVER tab = status/players/lifecycle; the ADMIN tab = live in-game commands.
 HEADS UP: these are SERVER settings - they take effect after the restart, so JOIN afterwards to see them. A restart drops the
 players on that shard for ~1 min (warn them, or check "Worms?" first). Worms repopulate ~10 MIN after ANY restart - that's normal.
 "@
@@ -241,6 +242,135 @@ foreach ($s in $SETTINGS) {
   $tb.Anchor='Top, Left, Right'; $pn.Controls.Add($tb); $s.TB = $tb
   $t.Y = $y + 50
 }
+
+# ==========================================================================
+# SERVER tab - live status + battlegroup lifecycle (drives Wormageddon.ps1).
+# Controls build offline; data loads only on button click, so headless
+# -SelfTest never touches the network.
+# ==========================================================================
+$tpServer = New-Object System.Windows.Forms.TabPage; $tpServer.Text='Server'; $tpServer.BackColor=[System.Drawing.Color]::White
+$pnServer = New-Object System.Windows.Forms.Panel; $pnServer.Dock='Fill'
+$btnSvStatus  = New-Object System.Windows.Forms.Button; $btnSvStatus.Text='Refresh status'; $btnSvStatus.Location='8,8'; $btnSvStatus.Width=110
+$btnSvPlayers = New-Object System.Windows.Forms.Button; $btnSvPlayers.Text='Players'; $btnSvPlayers.Location='122,8'; $btnSvPlayers.Width=80
+$btnSvWorms   = New-Object System.Windows.Forms.Button; $btnSvWorms.Text='Worms?'; $btnSvWorms.Location='206,8'; $btnSvWorms.Width=80
+$lblLife = New-Object System.Windows.Forms.Label; $lblLife.Text='Lifecycle:'; $lblLife.Location='322,12'; $lblLife.AutoSize=$true
+$btnSvRestart = New-Object System.Windows.Forms.Button; $btnSvRestart.Text='Restart (warn 60s)'; $btnSvRestart.Location='386,8'; $btnSvRestart.Width=126
+$btnSvStart   = New-Object System.Windows.Forms.Button; $btnSvStart.Text='Start'; $btnSvStart.Location='516,8'; $btnSvStart.Width=58
+$btnSvStop    = New-Object System.Windows.Forms.Button; $btnSvStop.Text='Stop'; $btnSvStop.Location='578,8'; $btnSvStop.Width=58
+$btnSvUpdate  = New-Object System.Windows.Forms.Button; $btnSvUpdate.Text='Update'; $btnSvUpdate.Location='640,8'; $btnSvUpdate.Width=64
+$txtServer = New-Object System.Windows.Forms.TextBox; $txtServer.Multiline=$true; $txtServer.ReadOnly=$true; $txtServer.ScrollBars='Both'; $txtServer.WordWrap=$false
+$txtServer.Font=New-Object System.Drawing.Font('Consolas',9); $txtServer.Location='8,40'; $txtServer.Size=New-Object System.Drawing.Size(700,412); $txtServer.Anchor='Top, Bottom, Left, Right'
+$txtServer.Text = 'Click "Refresh status" for battlegroup health + player counts, "Players" for the roster, or "Worms?" for the warm-up check.'
+$pnServer.Controls.AddRange(@($btnSvStatus,$btnSvPlayers,$btnSvWorms,$lblLife,$btnSvRestart,$btnSvStart,$btnSvStop,$btnSvUpdate,$txtServer))
+$tpServer.Controls.Add($pnServer); [void]$tc.TabPages.Add($tpServer)
+
+$btnSvStatus.Add_Click({ $txtServer.Text='Querying...'; [System.Windows.Forms.Application]::DoEvents(); $txtServer.Text=(Invoke-Dune @('status')).TrimEnd() })
+$btnSvPlayers.Add_Click({ $txtServer.Text='Querying...'; [System.Windows.Forms.Application]::DoEvents(); $txtServer.Text=(Invoke-Dune @('players')).TrimEnd() })
+$btnSvWorms.Add_Click({ $sh=$cboShard.SelectedItem; $txtServer.Text=(Invoke-Dune @('worms','-Shard',$sh)).TrimEnd() })
+$btnSvRestart.Add_Click({
+  $sh=$cboShard.SelectedItem
+  if ([System.Windows.Forms.MessageBox]::Show("Restart $sh now? Players get a 60-second in-game warning first, then the shard reboots (~1 min).",'Restart shard',[System.Windows.Forms.MessageBoxButtons]::YesNo) -ne 'Yes'){return}
+  Run-Console @("& '$DUNE' restart -Shard $sh -WarnSeconds 60 -Yes") "Wormageddon RESTART -> $sh"; Log "Restart (60s warning) launched for $sh."
+})
+$btnSvStart.Add_Click({
+  if ([System.Windows.Forms.MessageBox]::Show('Start the battlegroup?','Start',[System.Windows.Forms.MessageBoxButtons]::YesNo) -ne 'Yes'){return}
+  Run-Console @("& '$DUNE' start -Yes") 'Wormageddon START'; Log 'Start launched.'
+})
+$btnSvStop.Add_Click({
+  if ([System.Windows.Forms.MessageBox]::Show('STOP the battlegroup? This drops ALL players and the survival shard can hang on graceful stop.','Stop',[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Warning) -ne 'Yes'){return}
+  Run-Console @("& '$DUNE' stop -Yes") 'Wormageddon STOP'; Log 'Stop launched.'
+})
+$btnSvUpdate.Add_Click({
+  if ([System.Windows.Forms.MessageBox]::Show('Update the server? It may restart to apply.','Update',[System.Windows.Forms.MessageBoxButtons]::YesNo) -ne 'Yes'){return}
+  Run-Console @("& '$DUNE' update -Yes") 'Wormageddon UPDATE'; Log 'Update launched.'
+})
+
+# ==========================================================================
+# ADMIN tab - live in-game commands via the daemon (drives `publish`). The
+# command list mirrors the daemon catalogue; fields render per command; the
+# player list loads on demand. Nothing here touches the network at build time.
+# ==========================================================================
+$ADMINCMDS = @(
+  @{Id='ServiceBroadcast';      Label='Broadcast message';              Player=$false; Fixed=@{BroadcastType='Generic'}; Fields=@(@{K='Title';D='Server'},@{K='Body';D=''},@{K='BroadcastDuration';D='30'})}
+  @{Id='AddItemToInventory';    Label='Give item';                      Player=$true;  Fixed=@{};                        Fields=@(@{K='ItemName';D=''},@{K='Quantity';D='1'})}
+  @{Id='AwardXP';               Label='Award XP';                       Player=$true;  Fixed=@{};                        Fields=@(@{K='Experience';D='1000'})}
+  @{Id='UpdateAllWaterFillables';Label='Refill water';                  Player=$true;  Fixed=@{};                        Fields=@(@{K='WaterAmount';D='1000000'})}
+  @{Id='TeleportTo';            Label='Teleport (safe)';                Player=$true;  Fixed=@{};                        Fields=@(@{K='X';D='0'},@{K='Y';D='0'},@{K='Z';D='0'})}
+  @{Id='SpawnVehicleAt';        Label='Spawn vehicle';                  Player=$true;  Fixed=@{};                        Fields=@(@{K='ClassName';D=''},@{K='X';D='0'},@{K='Y';D='0'},@{K='Z';D='0'})}
+  @{Id='KickPlayer';            Label='Kick player';                    Player=$true;  Fixed=@{};                        Fields=@()}
+  @{Id='CleanPlayerInventory';  Label='Clean inventory (DESTRUCTIVE)';  Player=$true;  Fixed=@{};                        Fields=@()}
+  @{Id='ResetProgression';      Label='Reset progression (DESTRUCTIVE)';Player=$true;  Fixed=@{};                        Fields=@()}
+)
+$tpAdmin = New-Object System.Windows.Forms.TabPage; $tpAdmin.Text='Admin'; $tpAdmin.BackColor=[System.Drawing.Color]::White
+$pnAdmin = New-Object System.Windows.Forms.Panel; $pnAdmin.Dock='Fill'
+$lblPl = New-Object System.Windows.Forms.Label; $lblPl.Text='Player:'; $lblPl.Location='8,12'; $lblPl.AutoSize=$true
+$cboPlayer = New-Object System.Windows.Forms.ComboBox; $cboPlayer.Location='56,9'; $cboPlayer.Width=246; $cboPlayer.DropDownStyle='DropDownList'
+$btnPlRefresh = New-Object System.Windows.Forms.Button; $btnPlRefresh.Text='Refresh players'; $btnPlRefresh.Location='308,8'; $btnPlRefresh.Width=110
+$lblCmd = New-Object System.Windows.Forms.Label; $lblCmd.Text='Command:'; $lblCmd.Location='8,44'; $lblCmd.AutoSize=$true
+$cboCmd = New-Object System.Windows.Forms.ComboBox; $cboCmd.Location='72,41'; $cboCmd.Width=346; $cboCmd.DropDownStyle='DropDownList'
+foreach ($c in $ADMINCMDS) { [void]$cboCmd.Items.Add($c.Label) }
+$pnFields = New-Object System.Windows.Forms.Panel; $pnFields.Location='8,76'; $pnFields.Size=New-Object System.Drawing.Size(700,150); $pnFields.Anchor='Top, Left, Right'; $pnFields.AutoScroll=$true; $pnFields.BorderStyle='FixedSingle'
+$btnAdPreview = New-Object System.Windows.Forms.Button; $btnAdPreview.Text='Preview (dry-run)'; $btnAdPreview.Location='8,234'; $btnAdPreview.Width=130
+$btnAdSend = New-Object System.Windows.Forms.Button; $btnAdSend.Text='SEND'; $btnAdSend.Location='146,234'; $btnAdSend.Width=100; $btnAdSend.BackColor=[System.Drawing.Color]::FromArgb(150,60,60); $btnAdSend.ForeColor=[System.Drawing.Color]::White
+$lblAdNote = New-Object System.Windows.Forms.Label; $lblAdNote.Text='Live commands need the dune-server-service daemon on the VM. Preview shows the exact payload without sending. SEND asks to confirm.'; $lblAdNote.Location='8,272'; $lblAdNote.MaximumSize=New-Object System.Drawing.Size(690,0); $lblAdNote.AutoSize=$true; $lblAdNote.ForeColor=[System.Drawing.Color]::DimGray
+$pnAdmin.Controls.AddRange(@($lblPl,$cboPlayer,$btnPlRefresh,$lblCmd,$cboCmd,$pnFields,$btnAdPreview,$btnAdSend,$lblAdNote))
+$tpAdmin.Controls.Add($pnAdmin); [void]$tc.TabPages.Add($tpAdmin)
+
+$script:AdminBoxes=@{}
+function Build-AdminFields {
+  $pnFields.Controls.Clear(); $script:AdminBoxes=@{}
+  $i=$cboCmd.SelectedIndex; if ($i -lt 0){return}
+  $c=$ADMINCMDS[$i]; $y=6
+  foreach ($fld in $c.Fields) {
+    $l=New-Object System.Windows.Forms.Label; $l.Text=$fld.K; $l.Location=New-Object System.Drawing.Point(6,($y+3)); $l.Width=150
+    $t=New-Object System.Windows.Forms.TextBox; $t.Text="$($fld.D)"; $t.Location=New-Object System.Drawing.Point(162,$y); $t.Width=500; $t.Anchor='Top, Left, Right'
+    $pnFields.Controls.AddRange(@($l,$t)); $script:AdminBoxes[$fld.K]=$t; $y+=30
+  }
+  if (@($c.Fields).Count -eq 0) { $l=New-Object System.Windows.Forms.Label; $l.Text='(targets the selected player; no extra fields)'; $l.Location=New-Object System.Drawing.Point(6,6); $l.AutoSize=$true; $l.ForeColor=[System.Drawing.Color]::DimGray; $pnFields.Controls.Add($l) }
+}
+function Coerce-JsonVal($v) {
+  if ($v -match '^-?\d+$') { return [int]$v }
+  if ($v -match '^-?\d+\.\d+$') { return [double]$v }
+  return $v
+}
+function Build-AdminPayload {
+  $i=$cboCmd.SelectedIndex; if ($i -lt 0){ return $null }
+  $c=$ADMINCMDS[$i]; $f=@{}
+  foreach ($k in $c.Fixed.Keys) { $f[$k]=$c.Fixed[$k] }
+  if ($c.Player) {
+    $p=$cboPlayer.SelectedItem
+    if (-not $p) { Log 'Pick a player first (click "Refresh players").'; return $null }
+    $f['PlayerId']=$p.FlsId
+  }
+  foreach ($k in @($script:AdminBoxes.Keys)) { $val=$script:AdminBoxes[$k].Text; if ($val -ne '') { $f[$k]=Coerce-JsonVal $val } }
+  return @{ Id=$c.Id; Json=($f | ConvertTo-Json -Compress); Label=$c.Label }
+}
+$cboCmd.Add_SelectedIndexChanged({ Build-AdminFields })
+$btnPlRefresh.Add_Click({
+  Log 'Loading players...'; $cboPlayer.Items.Clear()
+  $out=Invoke-Dune @('players')
+  try {
+    foreach ($pl in ($out | ConvertFrom-Json)) {
+      $item=New-Object PSObject -Property @{ FlsId=$pl.flsId; Disp=("{0}  [{1}]" -f $pl.name,$pl.online) }
+      $item | Add-Member ScriptMethod ToString { $this.Disp } -Force
+      [void]$cboPlayer.Items.Add($item)
+    }
+    if ($cboPlayer.Items.Count -gt 0){$cboPlayer.SelectedIndex=0}
+    Log "Loaded $($cboPlayer.Items.Count) player(s)."
+  } catch { Log "Could not read players (is the daemon up?): $(($out|Out-String).Trim())" }
+})
+$btnAdPreview.Add_Click({
+  $p=Build-AdminPayload; if (-not $p){return}
+  [void](Invoke-Dune @('publish',$p.Id,$p.Json,'-DryRun'))
+  Log "PREVIEW $($p.Label): $($p.Json)"
+})
+$btnAdSend.Add_Click({
+  $p=Build-AdminPayload; if (-not $p){return}
+  if ([System.Windows.Forms.MessageBox]::Show("Send '$($p.Label)' to the LIVE server now?`n`n$($p.Json)",'Confirm live command',[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Warning) -ne 'Yes'){return}
+  $r=Invoke-Dune @('publish',$p.Id,$p.Json,'-Yes')
+  Log "SEND $($p.Label): $(($r|Out-String).Trim())"
+})
+if ($cboCmd.Items.Count -gt 0){ $cboCmd.SelectedIndex=0 }
 
 # Activity log strip at the bottom.
 $log = New-Object System.Windows.Forms.TextBox
@@ -284,6 +414,14 @@ $btnSummon = New-Object System.Windows.Forms.Button; $btnSummon.Text='SUMMON SHA
 $btnClose = New-Object System.Windows.Forms.Button; $btnClose.Text='Close'; $btnClose.Location='656,786'; $btnClose.Size=New-Object System.Drawing.Size(78,34)
 $btnApply.Anchor='Bottom, Left'; $btnReset.Anchor='Bottom, Left'; $btnSummon.Anchor='Bottom, Left'; $btnClose.Anchor='Bottom, Right'
 $form.Controls.AddRange(@($btnApply,$btnReset,$btnSummon,$btnClose))
+
+# The bottom APPLY / RESTORE / SUMMON row only applies to the settings tabs;
+# hide it on Server/Admin so those tabs read cleanly.
+$SETTINGS_TABS = @('Sandworm','Giant Worm','Storms','Harvest & economy','World & PvP')
+$tc.Add_SelectedIndexChanged({
+  $isSettings = $SETTINGS_TABS -contains $tc.SelectedTab.Text
+  $btnApply.Visible=$isSettings; $btnReset.Visible=$isSettings; $btnSummon.Visible=$isSettings
+})
 
 $btnConnect.Add_Click({ if (Show-ConnectDialog) { Log 'Connected.'; Update-Shards } else { Log 'Connect cancelled.' } })
 $btnStatus.Add_Click({ Log 'Querying server status...'; Log (Invoke-Dune @('status')).Trim() })
@@ -393,7 +531,8 @@ $form.Add_Shown({
 # Headless smoke test (used by build.bat / CI): build the form, report, exit.
 if ($SelfTest) {
   Load-PresetList
-  Write-Host "SELFTEST OK: built tabbed form with $($SETTINGS.Count) settings across $($tc.TabPages.Count) tabs; $($cboPreset.Items.Count) preset(s) loaded"
+  if ($cboCmd.Items.Count -gt 0){ $cboCmd.SelectedIndex=0; Build-AdminFields }
+  Write-Host "SELFTEST OK: $($tc.TabPages.Count) tabs ($($SETTINGS.Count) settings + Server + Admin), $($cboPreset.Items.Count) preset(s), $($cboCmd.Items.Count) admin command(s)"
   $form.Dispose(); return
 }
 [void]$form.ShowDialog()
