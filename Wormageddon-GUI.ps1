@@ -117,6 +117,7 @@ function Run-Console([string[]]$lines,[string]$title) {
   $foot = @("Write-Host ''", "Write-Host 'DONE - close this window. Join the shard to see the effect.' -ForegroundColor Green")
   $tmp  = Join-Path $env:TEMP ('dune_run_' + [Guid]::NewGuid().ToString('N') + '.ps1')
   ($hdr + $lines + $foot) -join "`r`n" | Set-Content -LiteralPath $tmp -Encoding UTF8
+  # invisibility:allow Run-Console deliberately opens a visible, -NoExit PowerShell window so the operator can READ the command output ("DONE - close this window"); this is a desktop GUI tool the operator runs by hand, not a client-endpoint autostart. The visible console is the feature.
   Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-NoExit','-File',('"'+$tmp+'"'))
 }
 
